@@ -1,93 +1,173 @@
-# Plan for peak calling on CAGE data 
+# Peak Calling on CAGE Data
 
+This repository provides a streamlined pipeline for strand-aware peak calling on CAGE (Cap Analysis Gene Expression) data and subsequent QC. Intended for use by the Brook's Lab.
 
-## Run strand-aware peak-calling methods on CAGE data
+---
 
-Methods
-- DBSCAN
-- DBSCAN + sliding window 
-- scipy find peaks 
-- MACS3
-- CAGEr
+## Project Layout
 
-*Inputs* from bam format :
-
-### BAM 1 
-- /private/groups/brookslab/gabai/projects/yeastMeth/data/rna/cage/bam/alpha_YPD/DRR524315.sorted.bam
-### BAM 2 
-- /private/groups/brookslab/gabai/projects/yeastMeth/data/rna/cage/bam/alpha_YPD/DRR524316.sorted.bam
-
-*Outputs* 
-- bed files predicting promoter regions 
-
-## QC
-
-- Length dist. of called regions 
-
-### Prepare Long-read data 
-
-Input : *Long-read teloprime aligned bam file*
-/private/groups/brookslab/gabai/projects/yeastMeth/data/rna/teloprime/tx_alignment/250609_teloprime_ys18_rep1.bam
-
-Output : *TSS's for long reads* 
-
-### Run bedtools closest
-
-*activate bedtools_env*
-
-Input : *Long-read TSS's* , *CAGE peak bed file*
-
-Output :
-
-- Precision/Recall of long-reads in CAGE peaks 
-- Dist from long-read to annotated CAGE peak (% within 50 bp of CAGE peak)
-
-### Prepare Annotation 
-
-Input : *Annotation File *
-/private/groups/brookslab/gabai/projects/yeastMeth/data/ref/sacCer3_ares_v13_sorted.bed
-
-```bash
-$ head /private/groups/brookslab/gabai/projects/yeastMeth/data/ref/sacCer3_ares_v13_sorted.bed
-chrI    334     649     YAL069W 1000    +       334     649     0       1       315,    0,
-chrI    537     792     YAL068W-A       1000    +       537     792     0       1       255,    0,
-chrI    1806    2169    PAU8    1000    -       1806    2169    0       1       363,    0,
-chrI    2479    2707    YAL067W-A       1000    +       2479    2707    0       1       228,    0,
-chrI    7234    9016    SEO1    1000    -       7234    9016    0       1       1782,   0,
-chrI    10090   10399   YAL066W 1000    +       10090   10399   0       1       309,    0,
-chrI    11564   11951   YAL065C 1000    -       11564   11951   0       1       387,    0,
-chrI    12045   12426   YAL064W-B       1000    +       12045   12426   0       1       381,    0,
-chrI    13362   13743   YAL064C-A       1000    -       13362   13743   0       1       381,    0,
-chrI    21565   21850   YAL064W 1000    +       21565   21850   0       1       285,    0,
+```plaintext
+CAGE_peak_calling/
+├── config.toml              # Pipeline configuration (inputs, methods, params)
+├── main.py                  # Driver script (dry-run & real run)
+├── utils.py                 # Argument parsing and core utilities
+├── macs3.py                 # MACS3 wrapper
+├── cager.py                 # CAGEr wrapper
+├── clustering/              # DBSCAN, HDBSCAN, find_peaks, sliding-window modules
+├── qc/                      # QC functions (TSS extraction, bedtools calls)
+├── plot_qc.py               # Script to generate QC plots
+└── output/                  # Results (one subfolder per sample)
 ```
 
-Output : TSV of start sites (chr  |  Pos   | Strand)
+Data files (BAMs, etc.) live outside the repo; see `config.toml` for their paths.
 
-### Run bedtools closest 
+---
 
-*activate bedtools_env*
+## Installation
 
-Input : *Annotation TSS's* , *CAGE peak bed file*
+1. Clone the repo:
 
-Output :
-- Number of peaks x Annotated Start Sites baseline 
-- Dist from annotated start-site to annotated CAGE peak (% within 50 bp of CAGE peak)
+   ```bash
+   git clone git@github.com:YOUR_USERNAME/CAGE_peak_calling.git
+   cd CAGE_peak_calling
+   ```
 
-### Summarization box plots and bars 
+2. Create and activate environments:
 
-One plot for each CAGE bam file 
+   ```bash
+   # for peak calling
+   conda env create -f peak_calling_env.yaml  # defines pysam, sklearn, scipy, etc.
+   conda activate peak_calling_env
 
-Input : 
-- Length dist. of called regions 
+   # for CAGEr (R-based)
+   conda create -n cager-env r-base r-cager
 
-Output : 
-- Box plots with deviations, seperated by method 
+   # for bedtools (QC)
+   conda create -n bedtools_env bedtools
+   ```
 
-Input : TSV with - 
-- Precision/Recall of long-reads in CAGE peaks 
-- Dist from long-read to annotated CAGE peak (% within 50 bp of CAGE peak)
-- Number of peaks x Annotated Start Sites baseline 
-- Dist from annotated start-site to annotated CAGE peak (% within 50 bp of CAGE peak)
+---
 
-Output :
-Bar plots for each metric 
+## Configuration (`config.toml`)
+
+All inputs, methods, and parameter settings are driven by `config.toml`.
+
+Key sections:
+
+* **Required inputs**: `bams`, `out_dir`
+* **Peak-calling methods**: flags `run_dbscan`, `run_hdbscan`, `run_find_peaks`, `run_macs3`, `run_cager`, `run_dbscan_sw` and their parameter arrays (e.g. `dbscan_eps = [5,10]`).
+* **QC**: `long_reads`, `annotation_bed`, `qc_dist_cutoff`, `make_plots`.
+
+Example:
+
+```toml
+run_macs3    = true
+macs3_gsize  = ["hs"]
+macs3_qvalue = [0.01, 0.05]
+```
+
+---
+
+## Usage
+
+### Dry-Run Mode (preview actions)
+
+```bash
+python main.py --config config.toml --dry_run
+```
+
+### Real Run
+
+```bash
+python main.py --config config.toml
+```
+
+Outputs are written to `output/<sample>/` as BED files.
+
+---
+
+## Methods Overview
+
+### 1. DBSCAN
+
+* **What it does**: Groups TSS 5′-end coverage points into clusters based on density.
+* **Key parameters**:
+
+  * `dbscan_eps`: maximum distance between two points to be considered in the same neighborhood (e.g. `[5, 10]` bp).
+  * `dbscan_min_samples`: minimum number of points to form a cluster (e.g. `[4, 6]`).
+* **Config keys**: `run_dbscan`, `dbscan_eps`, `dbscan_min_samples`.
+
+### 2. DBSCAN + Sliding Window
+
+* **What it does**: Aggregates reads in sliding bins, then calls DBSCAN on bin centers exceeding thresholds.
+* **Key parameters**:
+
+  * `sw_bin`: bin sizes in bp (e.g. `[5, 10]`).
+  * `sw_threshold`: minimum read count per bin (e.g. `[4, 6]`).
+* **Config keys**: `run_dbscan_sw`, `sw_bin`, `sw_threshold`, `dbscan_eps`, `dbscan_min_samples`.
+
+### 3. SciPy `find_peaks`
+
+* **What it does**: Identifies local maxima in per-position coverage profiles.
+* **Key parameters**:
+
+  * `peak_height`: minimum read count at a peak (e.g. `[4, 6]`).
+  * `peak_distance`: minimum distance between peaks (e.g. `[5, 10]`).
+* **Config keys**: `run_find_peaks`, `peak_height`, `peak_distance`.
+
+### 4. MACS3
+
+* **What it does**: Model-based peak calling widely used for ChIP-Seq, repurposed here for CAGE.
+* **Key parameters**:
+
+  * `macs3_gsize`: genome size code (`"hs"`, `"mm"`, etc.).
+  * `macs3_qvalue`: false discovery rate cutoff (e.g. `[0.01, 0.05]`).
+* **Config keys**: `run_macs3`, `macs3_gsize`, `macs3_qvalue`.
+
+### 5. CAGEr (R)
+
+* **What it does**: Clusters tag start sites into CAGE-defined peaks.
+* **Key parameters**:
+
+  * `cager_threshold`: minimum tag count per cluster (e.g. `[4]`).
+  * `cager_maxdist`: maximum distance to merge tags (e.g. `[10]` bp).
+* **Config keys**: `run_cager`, `cager_threshold`, `cager_maxdist`, `cager_env`.
+
+---
+
+## Quality Control (QC)
+
+1. **Extract TSS**
+
+   * From long-read BAM(s) and annotation BED.
+
+2. **Bedtools `closest`**
+
+   * Compare CAGE peaks to long-read TSS and annotation TSS.
+   * Metrics:
+
+     * Precision/Recall of long reads within peaks.
+     * Distance distributions (% within `qc_dist_cutoff` bp).
+
+3. **Region Length Distribution**
+
+   * Compute lengths of each called region across methods.
+
+4. **Summarization**
+
+   * Boxplots of peak lengths by method.
+   * Bar plots for precision, recall, and distance metrics.
+
+
+Plots will appear under `output/QC/plots/`.
+
+---
+
+## Placeholders for Figures
+
+* **Peak-length distribution**
+  ![Peak-length boxplot placeholder](path/to/lengths_boxplot.png)
+
+* **Precision/Recall barplot**
+  ![Precision/Recall placeholder](path/to/pr_barplot.png)
+

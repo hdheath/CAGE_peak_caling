@@ -65,8 +65,10 @@ def print_dry_run_plan(args, sample_dir, prefix):
 
     # 4) MACS3
     if args.run_macs3:
-        fn = f"{prefix}_MACS3_all.bed"
-        print(f"  [MACS3] would write {os.path.join(sample_dir, fn)}")
+        for g in args.macs3_gsize or ["hs"]:
+            for q in args.macs3_qvalue or [0.01]:
+                fn = f"{prefix}_MACS3_g{g}_q{q}.bed"
+                print(f" [MACS3] would write {os.path.join(sample_dir, fn)}")
     else:
         print("  [MACS3] skipped")
 
@@ -85,17 +87,12 @@ def print_dry_run_plan(args, sample_dir, prefix):
 
     # 6) CAGEr
     if args.run_cager:
-        try:
-            bed_path = run_cager(
-                bam_files=",".join(bam_list),
-                out_dir=sample_dir,
-                threshold=args.cager_threshold,
-                maxdist=args.cager_maxdist,
-                env=args.cager_env  
-            )
-            print(f"[CAGEr][{prefix}] Clusters written to {bed_path}")
-        except Exception as e:
-            warnings.warn(f"[CAGEr][{prefix}] Failed: {e}")
+        for thr in (args.cager_threshold or [1]):
+            for md in (args.cager_maxdist or [20]):
+                fn = f"{prefix}_CAGEr_thr{thr}_md{md}.bed"
+                print(f"  [CAGEr] would write {os.path.join(sample_dir, fn)}")
+    else:
+        print("  [CAGEr] skipped")
             
     # 7) QC
     if args.run_qc:
@@ -266,14 +263,17 @@ def main():
 
         # MACS3
         if args.run_macs3:
-            fn      = f"{prefix}_MACS3_all.bed"
-            out_bed = os.path.join(sample_dir, fn)
-            if os.path.exists(out_bed):
-                print(f"[MACS3][{prefix}] {fn} exists; skipping.")
-            else:
-                clusters = run_macs3(df, args.macs3_gsize, args.macs3_qvalue, sample_dir)
-                write_bed(clusters, out_bed)
-                print(f"[MACS3][{prefix}] Wrote {len(clusters)} peaks to {fn}")
+            for g in args.macs3_gsize or ["hs"]:
+                for q in args.macs3_qvalue or [0.01]:
+                    fn = f"{prefix}_MACS3_g{g}_q{q}.bed"
+                    out_bed = os.path.join(sample_dir, fn)
+                    if os.path.exists(out_bed):
+                        print(f"[MACS3][{prefix}] {fn} exists; skipping.")
+                    else:
+                        clusters = run_macs3(df, g, q, sample_dir)
+                        write_bed(clusters, out_bed)
+                        print(f"[MACS3][{prefix}] Wrote {len(clusters)} peaks to {fn}")
+
         else:
             print(f"[MACS3][{prefix}] Skipped")
 
@@ -382,7 +382,6 @@ def main():
             )
             # optionally make plots
             if args.make_plots:
-                import sys, subprocess
                 script = os.path.join(os.path.dirname(__file__), "plot_qc.py")
                 print(f"[PLOTS][{prefix}] Generating plots under {qc_base}/plots …")
                 subprocess.run(

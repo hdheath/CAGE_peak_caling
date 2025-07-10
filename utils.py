@@ -34,18 +34,9 @@ def parse_args():
         help="Restrict to a single chromosome (e.g. 'chr1')",
         default=None
     )
-    p.add_argument(
-        "--cager_threshold",
-        type=int,
-        default=1,
-        help="Minimum tag count threshold for CAGEr (default:1)"
-    )
-    p.add_argument(
-        "--cager_maxdist",
-        type=int,
-        default=20,
-        help="Maximum distance for CAGEr clustering (default:20)"
-    )
+    p.add_argument("--cager_threshold", nargs="+", type=int, default=[], help="Minimum tag count(s) for CAGEr")
+    p.add_argument("--cager_maxdist",   nargs="+", type=int, default=[], help="Maximum cluster distance(s) for CAGEr")
+    
     p.add_argument(
         "--dry_run",
         action="store_true",
@@ -95,18 +86,7 @@ def parse_args():
         help="peak distance(s)"
     )
 
-    p.add_argument("--run_macs3", action="store_true", help="Enable MACS3")
-    p.add_argument(
-        "--macs3_gsize",
-        default="hs",
-        help="Genome size for MACS3"
-    )
-    p.add_argument(
-        "--macs3_qvalue",
-        type=float,
-        default=0.01,
-        help="q-value for MACS3"
-    )
+
 
     p.add_argument("--run_dbscan_sw", action="store_true", help="Enable DBSCAN+sliding-window")
     p.add_argument(
@@ -121,6 +101,20 @@ def parse_args():
         type=int,
         help="read-count thresholds per bin"
     )
+    p.add_argument(
+        "--macs3_gsize",
+        nargs="+",
+        default=[],
+        help="Genome size(s) for MACS3 (e.g. hs mm dm)"
+    )
+    p.add_argument(
+        "--macs3_qvalue",
+        nargs="+",
+        type=float,
+        default=[],
+        help="q-value(s) for MACS3 (e.g. 0.01 0.05)"
+    )
+
     # QC options
     p.add_argument("--run_qc",           action="store_true", help="Enable QC at end")
     p.add_argument("--qc_out_dir",       help="Directory for QC outputs")

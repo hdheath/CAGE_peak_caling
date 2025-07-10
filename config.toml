@@ -34,8 +34,8 @@ peak_distance        = [5, 10]
 
 # MACS3: leave q-value and genome size as-is
 run_macs3            = true
-macs3_gsize          = "hs"
-macs3_qvalue         = 0.01
+macs3_gsize          = ["hs"]
+macs3_qvalue         = [0.01]
 
 # Sliding‐window: 5 or 10 bp bins, require ≥4–6 reads in the bin
 run_dbscan_sw        = true
@@ -44,8 +44,8 @@ sw_threshold         = [4, 6]
 
 # CAGEr: you could also bump this threshold
 run_cager            = true
-cager_threshold      = 4      # only tags ≥4
-cager_maxdist        = 10     # cluster within 10 bp
+cager_threshold      = [4]      # only tags ≥4
+cager_maxdist        = [10]     # cluster within 10 bp
 cager_env = 'cager-env'
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -69,4 +69,4 @@ annotation_bed       = "/private/groups/brookslab/gabai/projects/yeastMeth/data/
 bedtools_env = "bedtools_env"
 qc_dist_cutoff       = 1    # bp threshold for “within x bp”
 
-make_plots= true
+make_plots= false

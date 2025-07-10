@@ -1,0 +1,72 @@
+# config.toml
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Required Inputs
+# ───────────────────────────────────────────────────────────────────────────────
+bams        = ["/private/groups/brookslab/gabai/projects/yeastMeth/data/rna/cage/bam/alpha_YPD/DRR524315.sorted.bam", 
+                "/private/groups/brookslab/gabai/projects/yeastMeth/data/rna/cage/bam/alpha_YPD/DRR524316.sorted.bam"]
+out_dir    = "/private/groups/brookslab/hdheath/projects/peak_calling-CAGE/output/peak_bedfiles"
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Optional Inputs
+# ───────────────────────────────────────────────────────────────────────────────
+chrom     = "chrIV"        # no chromosome filter
+dry_run   = false    # set true to test without writing
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Peak-calling 
+# ───────────────────────────────────────────────────────────────────────────────
+
+# DBSCAN: require at least 4 tags per cluster, cluster tight peaks
+run_dbscan           = true
+dbscan_eps           = [5, 10]
+dbscan_min_samples   = [4, 6]   # each cluster must have ≥4 or ≥6 points
+
+# HDBSCAN: same logic
+run_hdbscan          = true
+hdbscan_min_cluster_size = [4, 6]
+hdbscan_min_samples  = 1
+
+# scipy.find_peaks: call any local maximum ≥4–6 reads, separated by ≤5–10 bp
+run_find_peaks       = true
+peak_height          = [4, 6]
+peak_distance        = [5, 10]
+
+# MACS3: leave q-value and genome size as-is
+run_macs3            = true
+macs3_gsize          = "hs"
+macs3_qvalue         = 0.01
+
+# Sliding‐window: 5 or 10 bp bins, require ≥4–6 reads in the bin
+run_dbscan_sw        = true
+sw_bin               = [5, 10]
+sw_threshold         = [4, 6]
+
+# CAGEr: you could also bump this threshold
+run_cager            = true
+cager_threshold      = 4      # only tags ≥4
+cager_maxdist        = 10     # cluster within 10 bp
+cager_env = 'cager-env'
+
+# ───────────────────────────────────────────────────────────────────────────────
+# QC
+# ───────────────────────────────────────────────────────────────────────────────
+run_qc               = true              # turn on all QC steps
+qc_out_dir           = "/private/groups/brookslab/hdheath/projects/peak_calling-CAGE/output/peak_bedfiles/QC"   # where QC outputs go
+
+# 1) Length‐distribution of called regions
+#   we’ll glob *.bed under each sample subdirectory
+
+# 2) Long‐read TSS → bed file
+long_reads           = [
+  "/private/groups/brookslab/gabai/projects/yeastMeth/data/rna/teloprime/tx_alignment/250609_teloprime_ys18_rep1.bam"
+]
+
+# 3) Annotation TSS
+annotation_bed       = "/private/groups/brookslab/gabai/projects/yeastMeth/data/ref/sacCer3_ares_v13_sorted.bed"
+
+# 4) bedtools environment & distance cutoff 
+bedtools_env = "bedtools_env"
+qc_dist_cutoff       = 1    # bp threshold for “within x bp”
+
+make_plots= true

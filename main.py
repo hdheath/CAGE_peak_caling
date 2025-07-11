@@ -16,6 +16,7 @@ from clustering  import run_dbscan, run_hdbscan, run_find_peaks, run_dbscan_sw
 from macs3       import run_macs3
 from cager       import run_cager
 from config      import load_config
+import shutil
 
 
 def _filter_bed_by_chrom(in_bed, out_bed, chrom):
@@ -341,6 +342,8 @@ def main():
                                     correctFirstG=cf,
                                     env=args.cager_env
                                 )
+                                # copy R’s output directly — no pandas header juggling
+                                shutil.copy(bed_path, out_bed)
                                 # run_cager should return the path to its .bed
                                 write_bed(pd.read_csv(bed_path, sep='\t'), out_bed)
                                 print(f"[CAGEr][{prefix}] Wrote clusters to {fn}")

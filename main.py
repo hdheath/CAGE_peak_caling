@@ -65,10 +65,18 @@ def print_dry_run_plan(args, sample_dir, prefix):
 
     # 4) MACS3
     if args.run_macs3:
-        for g in args.macs3_gsize or ["hs"]:
-            for q in args.macs3_qvalue or [0.01]:
-                fn = f"{prefix}_MACS3_g{g}_q{q}.bed"
-                print(f" [MACS3] would write {os.path.join(sample_dir, fn)}")
+        for g in (args.macs3_gsize or ["hs"]):
+            for q in (args.macs3_qvalue or [0.01]):
+                for nomodel in (args.macs3_nomodel or [False]):
+                    for shift in (args.macs3_shift or [0]):
+                        for extsize in (args.macs3_extsize or [147]):
+                            for summits in (args.macs3_call_summits or [False]):
+                                fn = (
+                                    f"{prefix}_MACS3_"
+                                    f"g{g}_q{q}_noModel{nomodel}_"
+                                    f"shift{shift}_ext{extsize}_summits{summits}.bed"
+                                )
+                                print(f"  [MACS3] would write {os.path.join(sample_dir, fn)}")
     else:
         print("  [MACS3] skipped")
 
@@ -89,8 +97,9 @@ def print_dry_run_plan(args, sample_dir, prefix):
     if args.run_cager:
         for thr in (args.cager_threshold or [1]):
             for md in (args.cager_maxdist or [20]):
-                fn = f"{prefix}_CAGEr_thr{thr}_md{md}.bed"
-                print(f"  [CAGEr] would write {os.path.join(sample_dir, fn)}")
+                for cf in (args.cager_correctFirstG or [False]):
+                    fn = f"{prefix}_CAGEr_thr{thr}_md{md}_cf{cf}.bed"
+                    print(f"  [CAGEr] would write {os.path.join(sample_dir, fn)}")
     else:
         print("  [CAGEr] skipped")
             
@@ -265,17 +274,34 @@ def main():
         if args.run_macs3:
             for g in args.macs3_gsize or ["hs"]:
                 for q in args.macs3_qvalue or [0.01]:
-                    fn = f"{prefix}_MACS3_g{g}_q{q}.bed"
-                    out_bed = os.path.join(sample_dir, fn)
-                    if os.path.exists(out_bed):
-                        print(f"[MACS3][{prefix}] {fn} exists; skipping.")
-                    else:
-                        clusters = run_macs3(df, g, q, sample_dir)
-                        write_bed(clusters, out_bed)
-                        print(f"[MACS3][{prefix}] Wrote {len(clusters)} peaks to {fn}")
-
+                    for nomodel in args.macs3_nomodel or [False]:
+                        for shift in args.macs3_shift or [0]:
+                            for extsize in args.macs3_extsize or [147]:
+                                for summits in args.macs3_call_summits or [False]:
+                                    fn = (
+                                        f"{prefix}_MACS3_"
+                                        f"g{g}_q{q}_noModel{nomodel}_"
+                                        f"shift{shift}_ext{extsize}_summits{summits}.bed"
+                                    )
+                                    out_bed = os.path.join(sample_dir, fn)
+                                    if os.path.exists(out_bed):
+                                        print(f"[MACS3][{prefix}] {fn} exists; skipping.")
+                                    else:
+                                        clusters = run_macs3(
+                                            df,
+                                            g,
+                                            q,
+                                            nomodel=nomodel,
+                                            shift=shift,
+                                            extsize=extsize,
+                                            call_summits=summits,
+                                            out_dir=sample_dir
+                                        )
+                                        write_bed(clusters, out_bed)
+                                        print(f"[MACS3][{prefix}] Wrote {len(clusters)} peaks to {fn}")
         else:
             print(f"[MACS3][{prefix}] Skipped")
+
 
         # DBSCAN + sliding-window
         if args.run_dbscan_sw:
@@ -298,24 +324,31 @@ def main():
 
         # CAGEr
         if args.run_cager:
-            fn      = f"{prefix}_CAGEr_clusters.bed"
-            out_bed = os.path.join(sample_dir, fn)
-            if os.path.exists(out_bed):
-                print(f"[CAGEr][{prefix}] {fn} exists; skipping.")
-            else:
-                try:
-                    bed_path = run_cager(
-                     bam_files=[bam_path],
-                     out_dir=sample_dir,
-                     threshold=args.cager_threshold,
-                     maxdist=args.cager_maxdist,
-                     env=args.cager_env
-                    )
-                    print(f"[CAGEr][{prefix}] Clusters written to {os.path.basename(bed_path)}")
-                except Exception as e:
-                    warnings.warn(f"[CAGEr][{prefix}] Failed: {e}")
+            for thr in args.cager_threshold or [1]:
+                for md in args.cager_maxdist or [20]:
+                    for cf in args.cager_correctFirstG or [False]:
+                        fn = f"{prefix}_CAGEr_thr{thr}_md{md}_cf{cf}.bed"
+                        out_bed = os.path.join(sample_dir, fn)
+                        if os.path.exists(out_bed):
+                            print(f"[CAGEr][{prefix}] {fn} exists; skipping.")
+                        else:
+                            try:
+                                bed_path = run_cager(
+                                    bam_files=[bam_path],
+                                    out_dir=sample_dir,
+                                    threshold=thr,
+                                    maxdist=md,
+                                    correctFirstG=cf,
+                                    env=args.cager_env
+                                )
+                                # run_cager should return the path to its .bed
+                                write_bed(pd.read_csv(bed_path, sep='\t'), out_bed)
+                                print(f"[CAGEr][{prefix}] Wrote clusters to {fn}")
+                            except Exception as e:
+                                warnings.warn(f"[CAGEr][{prefix}] Failed: {e}")
         else:
             print(f"[CAGEr][{prefix}] Skipped")
+
 
         # ------------------------------------------------------
         # QC
@@ -353,14 +386,50 @@ def main():
                     for d in (args.peak_distance or []):
                         beds_to_qc.append(f"{prefix}_findPeaks_h{h}_d{d}.bed")
             if args.run_macs3:
-                beds_to_qc.append(f"{prefix}_MACS3_all.bed")
+                for g in (args.macs3_gsize or ["hs"]):
+                    for q in (args.macs3_qvalue or [0.01]):
+                        for nomodel in (args.macs3_nomodel or [False]):
+                            for shift in (args.macs3_shift or [0]):
+                                for extsize in (args.macs3_extsize or [147]):
+                                    for summits in (args.macs3_call_summits or [False]):
+                                        beds_to_qc.append(
+                                            f"{prefix}_MACS3_"
+                                            f"g{g}_q{q}_noModel{nomodel}_"
+                                            f"shift{shift}_ext{extsize}_summits{summits}.bed"
+                                        )
             if args.run_dbscan_sw:
                 base_eps = (args.dbscan_eps or [5])[0]
                 for b in (args.sw_bin or []):
                     for thr in (args.sw_threshold or []):
                         beds_to_qc.append(f"{prefix}_DBSCAN_SW_eps{base_eps}_bin{b}_th{thr}.bed")
+            # CAGEr
             if args.run_cager:
-                beds_to_qc.append(f"{prefix}_CAGEr_clusters.bed")
+                for thr in (args.cager_threshold or [1]):
+                    for md in (args.cager_maxdist or [20]):
+                        for cf in (args.cager_correctFirstG or [False]):
+                            fn      = f"{prefix}_CAGEr_thr{thr}_md{md}_cf{cf}.bed"
+                            out_bed = os.path.join(sample_dir, fn)
+                            if os.path.exists(out_bed):
+                                print(f"[CAGEr][{prefix}] {fn} exists; skipping.")
+                            else:
+                                try:
+                                    # run_cager itself writes <prefix>_CAGEr_clusters.bed
+                                    bed_path = run_cager(
+                                        bam_files=[bam_path],
+                                        out_dir=sample_dir,
+                                        threshold=thr,
+                                        maxdist=md,
+                                        correctFirstG=cf,
+                                        env=args.cager_env
+                                    )
+                                    # rename/move to our naming convention
+                                    os.rename(bed_path, out_bed)
+                                    print(f"[CAGEr][{prefix}] Wrote clusters to {fn}")
+                                except Exception as e:
+                                    warnings.warn(f"[CAGEr][{prefix}] Failed: {e}")
+            else:
+                print(f"[CAGEr][{prefix}] Skipped")
+
 
             # DEBUG: print out the beds to QC and whether they exist
             print(f"[QC][{prefix}] beds_to_qc = {beds_to_qc!r}")

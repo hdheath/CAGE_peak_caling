@@ -17,36 +17,46 @@ dry_run   = false    # set true to test without writing
 # Peak-calling 
 # ───────────────────────────────────────────────────────────────────────────────
 
-# DBSCAN: require at least 4 tags per cluster, cluster tight peaks
+# ───────────────────────────────────────────────────────────────────────────────
+# Peak-calling 
+# ───────────────────────────────────────────────────────────────────────────────
+
+# DBSCAN: require at least 4–8 tags per cluster, cluster tight peaks
 run_dbscan           = true
-dbscan_eps           = [5, 10]
-dbscan_min_samples   = [4, 6]   # each cluster must have ≥4 or ≥6 points
+dbscan_eps           = [5, 10, 15]
+dbscan_min_samples   = [4, 6, 8]
 
 # HDBSCAN: same logic
 run_hdbscan          = true
-hdbscan_min_cluster_size = [4, 6]
-hdbscan_min_samples  = 1
+hdbscan_min_cluster_size = [4, 6, 8]
+hdbscan_min_samples      = [1, 2]
 
-# scipy.find_peaks: call any local maximum ≥4–6 reads, separated by ≤5–10 bp
+# scipy.find_peaks: call any local maximum ≥4–8 reads, separated by ≤5–15 bp
 run_find_peaks       = true
-peak_height          = [4, 6]
-peak_distance        = [5, 10]
+peak_height          = [4, 6, 8]
+peak_distance        = [5, 10, 15]
 
-# MACS3: leave q-value and genome size as-is
+# MACS3: sweep q-value, test no-model/shiftsize/extsize
 run_macs3            = true
-macs3_gsize          = ["hs"]
-macs3_qvalue         = [0.01]
+macs3_gsize          = ["hs", "1.2e7"]          # human vs yeast genome sizes
+macs3_qvalue         = [0.001, 0.005, 0.01]
+macs3_nomodel        = [false]
+macs3_shift          = [0, -75, 75]            # center reads, +/- shift
+macs3_extsize        = [147, 200]              # fragment extension lengths
+macs3_call_summits   = [true, false]
 
-# Sliding‐window: 5 or 10 bp bins, require ≥4–6 reads in the bin
+# Sliding‐window: 5–15 bp bins, require ≥4–8 reads in the bin
 run_dbscan_sw        = true
-sw_bin               = [5, 10]
-sw_threshold         = [4, 6]
+sw_bin               = [5, 10, 15]
+sw_threshold         = [4, 6, 8]
 
-# CAGEr: you could also bump this threshold
+# CAGEr: bump threshold, distance, and try the "correctFirstG" option
 run_cager            = true
-cager_threshold      = [4]      # only tags ≥4
-cager_maxdist        = [10]     # cluster within 10 bp
-cager_env = 'cager-env'
+cager_threshold      = [4, 6, 8]                # only tags ≥4,6,8
+cager_maxdist        = [10, 20, 30]             # cluster within 10,20,30 bp
+cager_correctFirstG  = [false, true]            # try correcting first‐G bias
+cager_env            = "cager-env"
+
 
 # ───────────────────────────────────────────────────────────────────────────────
 # QC
@@ -69,4 +79,4 @@ annotation_bed       = "/private/groups/brookslab/gabai/projects/yeastMeth/data/
 bedtools_env = "bedtools_env"
 qc_dist_cutoff       = 1    # bp threshold for “within x bp”
 
-make_plots= false
+make_plots= true

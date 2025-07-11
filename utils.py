@@ -114,6 +114,30 @@ def parse_args():
         default=[],
         help="q-value(s) for MACS3 (e.g. 0.01 0.05)"
     )
+    # after your existing macs3 args
+    p.add_argument(
+        "--macs3_nomodel", nargs="*", type=lambda x: x.lower() == "true",
+        help="List of booleans for --nomodel"
+    )
+    p.add_argument(
+        "--macs3_shift", nargs="*", type=int,
+        help="List of shift values for MACS3"
+    )
+    p.add_argument(
+        "--macs3_extsize", nargs="*", type=int,
+        help="List of extension sizes for MACS3"
+    )
+    p.add_argument(
+        "--macs3_call_summits", nargs="*", type=lambda x: x.lower() == "true",
+        help="List of booleans for --call-summits"
+    )
+
+    # and for CAGEr
+    p.add_argument(
+        "--cager_correctFirstG", nargs="*", type=lambda x: x.lower() == "true",
+        help="List of booleans for correctFirstG"
+    )
+
 
     # QC options
     p.add_argument("--run_qc",           action="store_true", help="Enable QC at end")
@@ -155,7 +179,25 @@ def build_df_from_bam(bam_paths, chrom_filter=None):
 
 
 def write_bed(clusters, out_path):
-    """Write a list of cluster dicts to a BED6 file."""
+    """Write either a list of cluster dicts *or* a DataFrame to a BED6 file."""
+    # If it's a DataFrame, assume it already has the right columns
+    if isinstance(clusters, pd.DataFrame):
+        df = clusters
+        if df.empty:
+            warnings.warn(f"No clusters to write for {out_path}")
+            return
+        with open(out_path, "w") as f:
+            # Expecting columns: chrom/seqnames, start, end, name, score, strand
+            # Adjust `seqnames`→`chrom` if necessary
+            chrom_col = "chrom" if "chrom" in df.columns else "seqnames"
+            for _, row in df.iterrows():
+                f.write(
+                    f"{row[chrom_col]}\t{row['start']}\t{row['end']}\t"
+                    f"{row['name']}\t{row['score']}\t{row['strand']}\n"
+                )
+        return
+
+    # Otherwise expect a list of dicts with keys chrom/start/end/name/score/strand
     if not clusters:
         warnings.warn(f"No clusters to write for {out_path}")
         return
@@ -166,6 +208,8 @@ def write_bed(clusters, out_path):
                 f"{cl['chrom']}\t{cl['start']}\t{cl['end']}\t"
                 f"{name}\t{cl['support']}\t{cl['strand']}\n"
             )
+
+
 
 
 def select_dbscan_params(df):

@@ -51,6 +51,11 @@ if ("tagClustersGR" %in% ls("package:CAGEr")) {
   tc <- tagClusters(cs)
 }
 
+# if tagClusters gave you a list, flatten it
+if (inherits(tc, "GRangesList")) {
+  tc <- unlist(tc, use.names=FALSE)
+}
+
 # 4) write BED
 out_bed <- file.path(getwd(), paste0(out_prefix, "_CAGEr_clusters.bed"))
 bed <- data.frame(

@@ -1,69 +1,74 @@
-import os
-import subprocess
+# === File: cager.py ===
+#!/usr/bin/env python3
 """
-Run CAGEr via Rscript in the given conda env on one or more BAMs
-and write out <sample>_CAGEr_clusters.bed in out_dir.
+CAGEr wrapper: runs an Rscript in a specified Conda environment,
+and returns the path to the generated clusters BED.
 
 Parameters
 ----------
-bam_files : str
-    Path to a single BAM, or comma-separated BAM paths.
-out_dir : str
+bam_files       : list of str
+    One or more BAM file paths.
+out_dir         : str
     Directory to write CAGEr output.
-threshold : int
-    Minimum tag count for CAGEr (passed to R script).
-maxdist : int
-    Maximum cluster distance for CAGEr (passed to R script).
-rscript_path : str, optional
-    Path to the run_cager.R wrapper (defaults to ./run_cager.R next to this file).
-env : str
+threshold       : int
+    Minimum tag count for clusters.
+maxdist         : int
+    Maximum clustering distance.
+correctFirstG   : bool, optional
+    If True, pass --correctFirstG TRUE to the R script.
+env             : str
     Name of the Conda environment where CAGEr is installed.
-
+rscript_path    : str, optional
+    Full path to your run_cager.R wrapper (defaults to sibling file).
 Returns
 -------
-bed_path : str
-    Path to the BED of clusters, e.g. <out_dir>/<sample>_CAGEr_clusters.bed
+bed_path        : str
+    Path to the <prefix>_CAGEr_clusters.bed produced in out_dir.
 """
-import subprocess
 import os
+import subprocess
 
-def run_cager(bam_files, out_dir, threshold, maxdist, env, rscript_path=None):
-    """
-    ... add rscript_path: optional path to the R wrapper script ...
-    """
-    # 1) join BAMs
+def run_cager(bam_files,
+              out_dir,
+              threshold,
+              maxdist,
+              correctFirstG=False,
+              env="cager-env",
+              rscript_path=None):
+    # ensure list
+    if isinstance(bam_files, str):
+        bam_files = [bam_files]
     bam_arg = ",".join(bam_files)
-    # 2) derive prefix
     prefix = os.path.basename(bam_files[0]).split(".")[0]
 
-    # 3) locate the R script
+    # locate R wrapper
     if rscript_path is None:
-        # assume we shipped run_cager.R next to this Python file
         module_dir = os.path.dirname(__file__)
         script = os.path.join(module_dir, "run_cager.R")
     else:
         script = rscript_path
-
     if not os.path.isfile(script):
-        raise FileNotFoundError(f"Cannot find R wrapper at {script}")
+        raise FileNotFoundError(f"CAGEr wrapper not found at {script}")
 
-    # 4) build the command with the full script path
+    # build command
     cmd = [
         "conda", "run", "-n", env,
         "Rscript", script,
         bam_arg, prefix,
         str(threshold), str(maxdist)
     ]
+    if correctFirstG:
+        cmd += ["--correctFirstG", "TRUE"]
 
-    # 5) make sure output directory exists
+    # run inside out_dir
     os.makedirs(out_dir, exist_ok=True)
-
-    # 6) run *inside* out_dir so your R script's getwd() → out_dir
+    print(f"[CAGEr] Running: {' '.join(cmd)} (cwd={out_dir})")
     subprocess.run(cmd, cwd=out_dir, check=True)
 
-    # 7) verify output
+    # verify output
     bed = os.path.join(out_dir, f"{prefix}_CAGEr_clusters.bed")
     if not os.path.exists(bed):
-        raise FileNotFoundError(f"CAGEr failed to produce {bed}")
+        raise FileNotFoundError(f"CAGEr did not produce expected BED: {bed}")
     return bed
+
 

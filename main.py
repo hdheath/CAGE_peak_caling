@@ -17,6 +17,7 @@ from macs3       import run_macs3
 from cager       import run_cager
 from config      import load_config
 import shutil
+import subprocess
 
 
 def _filter_bed_by_chrom(in_bed, out_bed, chrom):
@@ -334,18 +335,50 @@ def main():
                             print(f"[CAGEr][{prefix}] {fn} exists; skipping.")
                         else:
                             try:
+                                # 1) optionally subset the BAM to a single chromosome
+                                bam_input = bam_path
+                                if getattr(args, 'chrom', None):
+                                    bam_chr = os.path.join(
+                                        sample_dir,
+                                        f"{prefix}.{args.chrom}.bam"
+                                    )
+                                    subprocess.run([
+                                        "conda", "run", "-n", args.cager_env,
+                                        "samtools", "view", "-b",
+                                        bam_path, args.chrom,
+                                        "-o", bam_chr
+                                    ], check=True)
+                                    bam_input = bam_chr
+
+                                # 2) run CAGEr on the (possibly subset) BAM
                                 bed_path = run_cager(
-                                    bam_files=[bam_path],
+                                    bam_files=[bam_input],
                                     out_dir=sample_dir,
                                     threshold=thr,
                                     maxdist=md,
                                     correctFirstG=cf,
                                     env=args.cager_env
                                 )
-                                # copy R’s output directly — no pandas header juggling
-                                shutil.copy(bed_path, out_bed)
-                                # run_cager should return the path to its .bed
-                                write_bed(pd.read_csv(bed_path, sep='\t'), out_bed)
+
+                                # 3) relabel the "name" column to match other methods
+                                label = f"CAGEr_thr{thr}_md{md}_cf{cf}"
+                                df = pd.read_csv(
+                                    bed_path,
+                                    sep="\t",
+                                    header=None,
+                                    names=["seqnames","start","end","name","score","strand"]
+                                )
+                                df["name"] = label
+
+                                # 4) write out final BED and clean up intermediate
+                                df.to_csv(
+                                    out_bed,
+                                    sep="\t",
+                                    header=False,
+                                    index=False
+                                )
+                                os.remove(bed_path)
+
                                 print(f"[CAGEr][{prefix}] Wrote clusters to {fn}")
                             except Exception as e:
                                 warnings.warn(f"[CAGEr][{prefix}] Failed: {e}")
